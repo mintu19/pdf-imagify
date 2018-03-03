@@ -9,3 +9,7 @@ https://cgit.freedesktop.org/poppler/poppler/tree/utils
 This scripts assume that at current directory folder named root is present
 Root has further subfolders and these subfolder contains pdf files
 images will be extrancted from there and added to another folder
+
+
+Use ./init to generate images
+Use ./clean to clear all outputs and images
