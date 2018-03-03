@@ -1,0 +1,133 @@
+#!/bin/bash
+
+## This scripts assume that at current directory folder named root is present
+## Root has further subfolders and these subfolder contains pdf files
+## images will be extrancted from there and added to another folder
+
+main() {
+	text="Usage: \n\t 1) pImagify init -- to extract images \n\t 2) pImagify clear -- to clear folders"
+
+	if [ $# -eq 0 ];
+	then
+		echo -e $text
+		exit
+	elif [ $# -gt 1 ];
+	then
+		echo -e "Error in input \n"$text
+		exit
+	elif [ "$1" == "init" ];
+	then
+		gen
+	elif [ "$1" == "clean" ];
+	then
+		clean
+	else
+		echo -e $text
+		exit
+	fi
+}
+
+out_folder="out"
+csv_file="out/output.csv"
+track_file="out/output.txt"
+
+errorExit() {
+	echo "\nUser said no or Package manager error.."
+	echo "Exiting..."
+	exit
+}
+
+check() {
+	unameOut="$(uname -s)"
+	case "${unameOut}" in
+		Linux*)     machine="Linux";;
+		Darwin*)    machine="Mac";;
+		CYGWIN*)    machine="Cygwin";;
+		MINGW*)     machine="MinGw";;
+		*)          machine="UNKNOWN:${unameOut}"
+	esac
+	
+	if hash pdfimages 2>/dev/null; then
+		echo "working on it..."
+    else
+		printf "this requires package to be installed... (y/n):"
+		read -n1 ans
+		if [ "$ans" == "y" ] || [ "$ans" == "Y" ]; then
+			if [ "$machine" == "Mac" ] && hash brew 2>/dev/null; then
+				brew install poppler || errorExit
+				echo "\n\n"
+			elif [ "$machine" == "Linux" ]; then
+				sudo apt-get install pdfimages || errorExit
+				echo "\n\n"
+			else
+				errorExit
+			fi
+		else
+			echo "\nExiting..."
+        	exit
+		fi
+    fi
+}
+
+gen() {
+	check
+
+	rm -rf $out_folder
+	mkdir $out_folder
+	count=0
+	rm -f $track_file
+	touch $track_file
+	rm -f $csv_file
+	touch $csv_file
+	printf '%-10s %-35s %-50s %s\n' \ Count SubFolder Project Path >> $track_file
+	for subfolder in root/*; do
+		if [[ -d "$subfolder" && ! -L "$subfolder" ]]; then
+			subfolder_name=$(basename "$subfolder")
+			for project in $subfolder/*; do
+				if [ -f "$project" ]; then
+					file_name=$(basename "$project")
+					extension="${file_name##*.}"
+					if [ "$extension" = "pdf" ]; then
+						fail=false
+						project_name="${file_name%.*}"
+						folder_name="$subfolder"/"$project_name"
+						rm -rf $folder_name
+						mkdir $folder_name
+						out_name=$folder_name/"$subfolder_name"_"$project_name"
+						pdfimages -all $project $out_name || fail=true
+						if [ $fail = false ]; then
+							count=$((count+=1))
+							echo "Images generated for $count : $project_name"
+							printf '%-10s %-35s %-50s %s\n' \ $count $subfolder_name $project_name $folder_name >> $track_file
+							echo "$count"",""$subfolder_name"",""$project_name"",""$folder_name" >> $csv_file
+						else
+							echo "Failed for $subfolder_name - $project - \t $folder_name" | tee >> $track_file
+						fi
+					fi
+				fi
+			done
+		fi
+	done
+}
+
+clean() {
+	rm -rf $out_folder
+	for subfolder in root/*; do
+		if [[ -d "$subfolder" && ! -L "$subfolder" ]]; then
+			# $subfolder is a directory
+			for project in $subfolder/*; do
+				if [ -f "$project" ]; then
+					file_name=$(basename "$project")
+					extension="${file_name##*.}"
+					if [ "$extension" = "pdf" ]; then
+						project_name="${file_name%.*}"
+						folder_name="$subfolder"/"$project_name"
+						rm -rf $folder_name
+					fi
+				fi
+			done
+		fi
+	done
+}
+
+main "$@"
